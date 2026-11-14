@@ -91,7 +91,10 @@ dev-workstation/
 └── evidence/
     ├── github-public-repository.png
     ├── github-public-settings.png
-    └── vscode-wsl-connected.png
+    ├── vscode-wsl-connected.png
+    ├── terminal-practice.png
+    ├── docker-images-ps.png
+    └── port-mapping-browser.png
 ```
 
 > 포트 매핑 브라우저 검증 이미지는 실제 `http://localhost:8080` 주소창과 웹페이지가 함께 보이는 캡처를 별도로 추가하는 것이 가장 안전하다.
@@ -123,7 +126,19 @@ dev-workstation/
 drwx------  ->  drwxr-xr-x
 ```
 
-`r = 4`, `w = 2`, `x = 1`이며 `644`, `755`는 이 값을 조합한 숫자 권한이다.
+`r = 4`, `w = 2`, `x = 1`이며 `644`, `755`는 이 값을 조합한 숫자 권한이다. 예를 들어 `644`는 소유자 권한 `4+2=6`(읽기·쓰기), 그룹 권한 `4`(읽기), 기타 사용자 권한 `4`(읽기)를 뜻한다.
+
+명령 실행 증거는 `evidence/terminal-practice.png`에 추가한다. `mkdir`와 `touch`는 성공해도 기본적으로 출력이 없으므로, 생성 명령과 이어지는 `ls -la terminal-practice` 결과를 한 화면에 담아 파일이 만들어진 것을 확인한다.
+
+```bash
+mkdir -p terminal-practice
+touch terminal-practice/file1.txt
+ls -la terminal-practice
+```
+
+> 아래 캡처는 위 명령을 실제로 실행한 터미널 화면으로 교체한다.
+>
+> ![터미널 파일 생성 및 목록 확인](evidence/terminal-practice.png)
 
 
 ---
@@ -148,12 +163,21 @@ Hello from Docker!
 This message shows that your installation appears to be working correctly.
 ```
 
-또한 다음 명령으로 이미지와 컨테이너 상태를 확인했다.
+또한 다음 명령으로 이미지와 컨테이너 상태를 확인했다. `docker images`는 로컬 이미지 목록을, `docker ps -a`는 실행 중이거나 종료된 모든 컨테이너를 보여준다. 아래 명령을 다시 실행해 실제 결과를 확인하고 터미널 캡처를 함께 보관한다.
 
 ```bash
 docker images
-docker ps
 docker ps -a
+```
+
+이미지 목록에서는 `dev-web:v1`, 컨테이너 목록에서는 `ubuntu-run`, `dev-web`, `bind-web` 등의 이름과 상태를 확인한다. 실행 순서나 정리 여부에 따라 목록은 달라질 수 있으므로 제출할 때는 본인 터미널의 실제 출력으로 기록한다.
+
+![Docker 이미지와 전체 컨테이너 목록](evidence/docker-images-ps.png)
+
+추가 확인 명령:
+
+```bash
+docker ps
 docker logs attach-test
 docker stats --no-stream
 ```
@@ -213,7 +237,7 @@ docker build -t dev-web:v1 .
 naming to docker.io/library/dev-web:v1
 ```
 
-이미지 목록에서 `dev-web:v1` 생성도 확인했다.
+이미지 목록에서 `dev-web:v1` 생성도 확인했다. 이미지와 컨테이너는 역할이 다르다. 이미지는 실행에 필요한 파일과 설정을 담은 템플릿이며, 컨테이너는 이미지를 실행한 인스턴스다. 예를 들어 `dev-web:v1`은 이미지이고 `--name dev-web`으로 실행한 웹 서버가 컨테이너다. 컨테이너 안에서 생긴 변경은 이미지에 자동 반영되지 않으며, 컨테이너를 지우고 같은 이미지로 새 컨테이너를 만들 수 있다.
 
 ---
 
@@ -234,8 +258,10 @@ docker run -d --name dev-web -p 8080:80 dev-web:v1
 의미:
 
 ```text
-Host 8080 → Container 80 → Nginx
+`Host 8080 → Container 80 → Nginx`
 ```
+
+컨테이너는 자체 네트워크 네임스페이스에서 호스트와 분리된 네트워크 인터페이스와 포트를 사용한다. `-p 8080:80`은 호스트의 8080 포트 요청을 컨테이너의 80 포트로 전달해 격리된 서비스에 접속하게 한다.
 
 검증 주소:
 
@@ -243,7 +269,27 @@ Host 8080 → Container 80 → Nginx
 http://localhost:8080
 ```
 
-> 평가 증거로는 주소창의 `http://localhost:8080`과 페이지 내용이 함께 보이는 브라우저 캡처를 `evidence/port-mapping-browser.png`로 추가하는 것이 가장 확실하다.
+브라우저에서 `http://localhost:8080`을 열어 페이지가 표시되는지 확인한다. 아래 캡처에는 브라우저 주소창과 응답 페이지가 함께 보여야 한다.
+
+![localhost 8080 포트 매핑 접속 결과](evidence/port-mapping-browser.png)
+
+### 포트 충돌 진단 및 해제
+
+`docker run`에서 `port is already allocated` 오류가 나면 먼저 호스트의 8080 포트를 사용하는 프로세스나 컨테이너를 확인한다. WSL Ubuntu에서는 다음 명령을 사용할 수 있다.
+
+```bash
+sudo ss -ltnp | grep ':8080'
+docker ps --filter publish=8080
+```
+
+프로세스가 점유 중이면 `ss` 결과의 PID를 확인하고, 종료해도 되는 프로세스인지 확인한 뒤 종료한다. Docker 컨테이너가 점유 중이면 해당 컨테이너를 확인하고 중지한다.
+
+```bash
+sudo kill PID_NUMBER
+docker stop CONTAINER_NAME
+```
+
+`PID_NUMBER` 또는 `CONTAINER_NAME`은 확인한 실제 값으로 바꿔 입력한다. 사용 중인 프로세스를 확인하지 않고 강제 종료하지 않는다. 해제 후 `sudo ss -ltnp | grep ':8080'` 또는 `docker ps --filter publish=8080`으로 다시 확인한다. 포트가 비었으면 실행을 재시도한다. 다른 호스트 포트 사용도 가능하다. 예: `-p 8082:80`이면 `http://localhost:8082`로 접속한다.
 
 ---
 
@@ -270,7 +316,7 @@ Bind Mount Changed!
 
 로 즉시 변경되었다.
 
-이미지를 다시 빌드하거나 컨테이너를 재생성하지 않고도 호스트 파일 변경이 컨테이너에 반영됨을 확인했다.
+이미지를 다시 빌드하거나 컨테이너를 재생성하지 않고도 호스트 파일 변경이 컨테이너에 반영됨을 확인했다. 명령의 `$PWD/app`은 현재 프로젝트 경로를 기준으로 한 상대 경로이므로 프로젝트 폴더에서 실행해야 한다. 상대 경로는 저장소를 다른 위치에 clone해도 명령을 재사용하기 쉽지만, 실행 위치가 다르면 대상 경로도 달라질 수 있다. 절대 경로는 실행 위치와 무관하게 대상을 분명히 지정하지만 사용자별 경로를 포함하면 다른 컴퓨터에서 수정이 필요하다. 이 과제에서는 clone 위치에 맞춰 재현하기 쉽도록 상대 경로를 사용했다. `:ro`는 컨테이너에서 마운트 내용을 읽기 전용으로 사용한다는 뜻이다.
 
 ---
 
@@ -498,6 +544,8 @@ docker info
 ### 상세 터미널/도커/Git 로그
 
 ```text
+evidence/terminal-practice.png
+evidence/docker-images-ps.png
 ```
 
 ### GitHub 공개 저장소 증거
@@ -519,7 +567,7 @@ evidence/vscode-wsl-connected.png
 evidence/port-mapping-browser.png
 ```
 
-이 파일은 실제 브라우저에서 `http://localhost:8080` 주소창과 웹페이지가 함께 보이도록 캡처한 이미지여야 한다.
+이 파일은 실제 브라우저에서 `http://localhost:8080` 주소창과 웹페이지가 함께 보이도록 캡처한 이미지여야 한다. 위 경로의 이미지 파일은 실제 실행 화면을 캡처해 `evidence/` 폴더에 저장해야 README에서 정상 표시된다.
 
 ---
 
